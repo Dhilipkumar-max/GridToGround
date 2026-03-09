@@ -25,6 +25,7 @@ interface DesignItem {
     sharedBy?: string | null;
     sharedAt?: string | null;
     isPublic?: boolean;
+    layoutJson?: any;
 }
 
 interface DesignConfig {
@@ -47,7 +48,7 @@ type RenderCompletePayload = {
 
 type VisualizerLocationState = {
     initialImage?: string;
-    initialRender?: string | null;
+    initialRendered?: string | null;
     ownerId?: string | null;
     name?: string | null;
     sharedBy?: string | null;

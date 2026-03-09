@@ -1,7 +1,7 @@
 import puter from "@heyputer/puter.js";
-import {getOrCreateHostingConfig, uploadImageToHosting} from "./puter.hosting";
-import {isHostedUrl} from "./utils";
-import {PUTER_WORKER_URL} from "./constants";
+import { getOrCreateHostingConfig, uploadImageToHosting } from "./puter.hosting";
+import { isHostedUrl } from "./utils";
+import { PUTER_WORKER_URL } from "./constants";
 
 export const signIn = async () => await puter.auth.signIn();
 
@@ -16,28 +16,39 @@ export const getCurrentUser = async () => {
 }
 
 export const createProject = async ({ item, visibility = "private" }: CreateProjectParams): Promise<DesignItem | null | undefined> => {
-    if(!PUTER_WORKER_URL) {
-        console.warn('Missing VITE_PUTER_WORKER_URL; skip history fetch;');
-        return null;
-    }
     const projectId = item.id;
 
     const hosting = await getOrCreateHostingConfig();
 
-    const hostedSource = projectId ?
+    // If hosting fails, we can still proceed with data URLs for preview
+    const hostedSource = (projectId && hosting) ?
         await uploadImageToHosting({ hosting, url: item.sourceImage, projectId, label: 'source', }) : null;
 
-    const hostedRender = projectId && item.renderedImage ?
+    const hostedRender = (projectId && item.renderedImage && hosting) ?
         await uploadImageToHosting({ hosting, url: item.renderedImage, projectId, label: 'rendered', }) : null;
 
-    const resolvedSource = hostedSource?.url || (isHostedUrl(item.sourceImage)
-            ? item.sourceImage
-            : ''
-    );
+    if (!PUTER_WORKER_URL) {
+        console.warn('Missing VITE_PUTER_WORKER_URL; project will not be saved permanently.');
+        return {
+            ...item,
+            sourceImage: hostedSource?.url || item.sourceImage,
+            renderedImage: hostedRender?.url || item.renderedImage,
+        };
+    }
 
-    if(!resolvedSource) {
-        console.warn('Failed to host source image, skipping save.')
-        return null;
+    const resolvedSource = hostedSource?.url || (isHostedUrl(item.sourceImage)
+        ? item.sourceImage
+        : '');
+
+    if (!resolvedSource) {
+        console.warn('Source image must be hosted before saving to Puter worker.');
+        // Fallback to local item if hosting failed but worker exists, 
+        // though the worker will likely reject it if it expects URLs.
+        return {
+            ...item,
+            sourceImage: hostedSource?.url || item.sourceImage,
+            renderedImage: hostedRender?.url || item.renderedImage,
+        };
     }
 
     const resolvedRender = hostedRender?.url
@@ -68,7 +79,7 @@ export const createProject = async ({ item, visibility = "private" }: CreateProj
             })
         });
 
-        if(!response.ok) {
+        if (!response.ok) {
             console.error('failed to save the project', await response.text());
             return null;
         }
@@ -83,7 +94,7 @@ export const createProject = async ({ item, visibility = "private" }: CreateProj
 }
 
 export const getProjects = async () => {
-    if(!PUTER_WORKER_URL) {
+    if (!PUTER_WORKER_URL) {
         console.warn('Missing VITE_PUTER_WORKER_URL; skip history fetch;');
         return []
     }
@@ -91,7 +102,7 @@ export const getProjects = async () => {
     try {
         const response = await puter.workers.exec(`${PUTER_WORKER_URL}/api/projects/list`, { method: 'GET' });
 
-        if(!response.ok) {
+        if (!response.ok) {
             console.error('Failed to fetch history', await response.text());
             return [];
         }

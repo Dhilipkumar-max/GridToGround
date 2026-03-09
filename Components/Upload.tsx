@@ -1,7 +1,7 @@
-import React, {useCallback, useEffect, useRef, useState} from 'react'
-import {useOutletContext} from "react-router";
-import {CheckCircle2, ImageIcon, UploadIcon} from "lucide-react";
-import {PROGRESS_INCREMENT, REDIRECT_DELAY_MS, PROGRESS_INTERVAL_MS} from "../lib/constants";
+import React, { useCallback, useEffect, useRef, useState } from 'react'
+import { useOutletContext } from "react-router";
+import { CheckCircle2, ImageIcon, UploadIcon } from "lucide-react";
+import { PROGRESS_INCREMENT, REDIRECT_DELAY_MS, PROGRESS_INTERVAL_MS } from "../lib/constants";
 
 interface UploadProps {
     onComplete?: (base64Data: string) => void;
@@ -14,7 +14,7 @@ const Upload = ({ onComplete }: UploadProps) => {
     const intervalRef = useRef<NodeJS.Timeout | null>(null);
     const timeoutRef = useRef<NodeJS.Timeout | null>(null);
 
-    const { isSignedIn } = useOutletContext<AuthContext>();
+    const { isSignedIn, signIn } = useOutletContext<AuthContext>();
 
     useEffect(() => {
         return () => {
@@ -30,8 +30,6 @@ const Upload = ({ onComplete }: UploadProps) => {
     }, []);
 
     const processFile = useCallback((file: File) => {
-        if (!isSignedIn) return;
-
         setFile(file);
         setProgress(0);
 
@@ -62,11 +60,10 @@ const Upload = ({ onComplete }: UploadProps) => {
             }, PROGRESS_INTERVAL_MS);
         };
         reader.readAsDataURL(file);
-    }, [isSignedIn, onComplete]);
+    }, [onComplete]);
 
     const handleDragOver = (e: React.DragEvent) => {
         e.preventDefault();
-        if (!isSignedIn) return;
         setIsDragging(true);
     };
 
@@ -88,11 +85,17 @@ const Upload = ({ onComplete }: UploadProps) => {
     };
 
     const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        if (!isSignedIn) return;
-
         const selectedFile = e.target.files?.[0];
         if (selectedFile) {
             processFile(selectedFile);
+        }
+    };
+
+    const handleZoneClick = (e: React.MouseEvent) => {
+        if (!isSignedIn) {
+            e.preventDefault();
+            e.stopPropagation();
+            signIn?.();
         }
     };
 
@@ -104,14 +107,16 @@ const Upload = ({ onComplete }: UploadProps) => {
                     onDragOver={handleDragOver}
                     onDragLeave={handleDragLeave}
                     onDrop={handleDrop}
+                    onClick={handleZoneClick}
                 >
-                    <input
-                        type="file"
-                        className="drop-input"
-                        accept=".jpg,.jpeg,.png,.webp"
-                        disabled={!isSignedIn}
-                        onChange={handleChange}
-                    />
+                    {isSignedIn && (
+                        <input
+                            type="file"
+                            className="drop-input"
+                            accept=".jpg,.jpeg,.png,.webp"
+                            onChange={handleChange}
+                        />
+                    )}
 
                     <div className="drop-content">
                         <div className="drop-icon">
@@ -120,7 +125,7 @@ const Upload = ({ onComplete }: UploadProps) => {
                         <p>
                             {isSignedIn ? (
                                 "Click to upload or just drag and drop"
-                            ): ("Sign in or sign up with Puter to upload")}
+                            ) : ("Sign in or sign up with Puter to upload")}
                         </p>
                         <p className="help">Maximum file size 50 MB.</p>
                     </div>
@@ -131,7 +136,7 @@ const Upload = ({ onComplete }: UploadProps) => {
                         <div className="status-icon">
                             {progress === 100 ? (
                                 <CheckCircle2 className="check" />
-                            ): (
+                            ) : (
                                 <ImageIcon className="image" />
                             )}
                         </div>

@@ -1,23 +1,34 @@
-import { useNavigate, useOutletContext, useParams} from "react-router";
-import {useEffect, useRef, useState} from "react";
-import {generate3DView} from "../../lib/ai.action";
-import {Box, Download, RefreshCcw, Share2, X} from "lucide-react";
-import Button from "../../components/ui/Button";
-import {createProject, getProjectById} from "../../lib/puter.action";
-import {ReactCompareSlider, ReactCompareSliderImage} from "react-compare-slider";
+import { useNavigate, useOutletContext, useParams, useLocation } from "react-router";
+import { useEffect, useRef, useState } from "react";
+import { generate3DView, generate3DLayout } from "../../lib/ai.action";
+import { Box, Download, RefreshCcw, Share2, X } from "lucide-react";
+import Button from "../../Components/ui/Button";
+import { createProject, getProjectById } from "../../lib/puter.action";
+import { ReactCompareSlider, ReactCompareSliderImage } from "react-compare-slider";
 
 const VisualizerId = () => {
     const { id } = useParams();
     const navigate = useNavigate();
+    const location = useLocation();
     const { userId } = useOutletContext<AuthContext>()
+
+    const locationState = location.state as VisualizerLocationState;
 
     const hasInitialGenerated = useRef(false);
 
-    const [project, setProject] = useState<DesignItem | null>(null);
-    const [isProjectLoading, setIsProjectLoading] = useState(true);
+    const [project, setProject] = useState<DesignItem | null>(locationState?.initialImage ? {
+        id: id || '',
+        name: locationState.name,
+        sourceImage: locationState.initialImage,
+        renderedImage: locationState.initialRendered || null,
+        timestamp: Date.now()
+    } : null);
+    const [isProjectLoading, setIsProjectLoading] = useState(!locationState?.initialImage);
 
     const [isProcessing, setIsProcessing] = useState(false);
-    const [currentImage, setCurrentImage] = useState<string | null>(null);
+    const [isProcessing3D, setIsProcessing3D] = useState(false);
+    const [currentImage, setCurrentImage] = useState<string | null>(locationState?.initialRendered || null);
+    const [error, setError] = useState<string | null>(null);
 
     const handleBack = () => navigate('/');
     const handleExport = () => {
@@ -25,20 +36,21 @@ const VisualizerId = () => {
 
         const link = document.createElement('a');
         link.href = currentImage;
-        link.download = `roomify-${id || 'design'}.png`;
+        link.download = `gridtoground-${id || 'design'}.png`;
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
     }
 
     const runGeneration = async (item: DesignItem) => {
-        if(!id || !item.sourceImage) return;
+        if (!id || !item.sourceImage) return;
 
         try {
             setIsProcessing(true);
+            setError(null);
             const result = await generate3DView({ sourceImage: item.sourceImage });
 
-            if(result.renderedImage) {
+            if (result.renderedImage) {
                 setCurrentImage(result.renderedImage);
 
                 const updatedItem = {
@@ -52,15 +64,58 @@ const VisualizerId = () => {
 
                 const saved = await createProject({ item: updatedItem, visibility: "private" })
 
-                if(saved) {
+                if (saved) {
                     setProject(saved);
                     setCurrentImage(saved.renderedImage || result.renderedImage);
                 }
+            } else {
+                setError("AI returned an empty result. Please check if your prompt or image is valid.");
             }
-        } catch (error) {
-            console.error('Generation failed: ', error)
+        } catch (err: any) {
+            console.error('Generation failed: ', err)
+            setError(err?.message || "Something went wrong during generation. Check console for details.");
         } finally {
             setIsProcessing(false);
+        }
+    }
+
+    const run3DGeneration = async () => {
+        if (!project || !project.sourceImage) return;
+
+        try {
+            setIsProcessing3D(true);
+            setError(null);
+
+            if (project.layoutJson) {
+                navigate(`/3d-visualizer/${project.id}`, { state: project });
+                return;
+            }
+
+            const layoutJson = await generate3DLayout({ sourceImage: project.sourceImage });
+
+            if (layoutJson) {
+                const updatedItem = {
+                    ...project,
+                    layoutJson,
+                    timestamp: Date.now(),
+                };
+
+                const saved = await createProject({ item: updatedItem, visibility: "private" });
+
+                if (saved) {
+                    setProject(saved);
+                    navigate(`/3d-visualizer/${saved.id}`, { state: saved });
+                } else {
+                    navigate(`/3d-visualizer/${updatedItem.id || id}`, { state: updatedItem });
+                }
+            } else {
+                setError("AI failed to generate 3D layout. Please try again.");
+            }
+        } catch (err: any) {
+            console.error('3D Generation failed: ', err)
+            setError(err?.message || "Something went wrong during 3D generation.");
+        } finally {
+            setIsProcessing3D(false);
         }
     }
 
@@ -116,7 +171,7 @@ const VisualizerId = () => {
                 <div className="brand">
                     <Box className="logo" />
 
-                    <span className="name">Roomify</span>
+                    <span className="name">GridToGround</span>
                 </div>
                 <Button variant="ghost" size="sm" onClick={handleBack} className="exit">
                     <X className="icon" /> Exit Editor
@@ -135,20 +190,39 @@ const VisualizerId = () => {
                         <div className="panel-actions">
                             <Button
                                 size="sm"
+                                onClick={run3DGeneration}
+                                className="build-3d"
+                                disabled={!currentImage || isProcessing3D}
+                            >
+                                <Box className="w-4 h-4 mr-2" /> {isProcessing3D ? "Building..." : "Build 3D"}
+                            </Button>
+                            <Button
+                                size="sm"
                                 onClick={handleExport}
                                 className="export"
                                 disabled={!currentImage}
                             >
                                 <Download className="w-4 h-4 mr-2" /> Export
                             </Button>
-                            <Button size="sm" onClick={() => {}} className="share">
+                            <Button size="sm" onClick={() => { }} className="share">
                                 <Share2 className="w-4 h-4 mr-2" />
                                 Share
                             </Button>
                         </div>
                     </div>
 
-                    <div className={`render-area ${isProcessing ? 'is-processing': ''}`}>
+                    <div className={`render-area ${isProcessing ? 'is-processing' : ''}`}>
+                        {error && (
+                            <div className="absolute inset-0 z-50 flex items-center justify-center bg-red-50/90 backdrop-blur-sm p-6 text-center">
+                                <div className="max-w-xs">
+                                    <p className="text-red-600 font-bold mb-2">Generation Failed</p>
+                                    <p className="text-red-500 text-sm">{error}</p>
+                                    <Button variant="outline" size="sm" className="mt-4" onClick={() => project && runGeneration(project)}>
+                                        Try Again
+                                    </Button>
+                                </div>
+                            </div>
+                        )}
                         {currentImage ? (
                             <img src={currentImage} alt="AI Render" className="render-img" />
                         ) : (
@@ -190,7 +264,7 @@ const VisualizerId = () => {
                                     <ReactCompareSliderImage src={project?.sourceImage} alt="before" className="compare-img" />
                                 }
                                 itemTwo={
-                                    <ReactCompareSliderImage src={currentImage || project?.renderedImage} alt="after" className="compare-img" />
+                                    <ReactCompareSliderImage src={currentImage || project?.renderedImage || undefined} alt="after" className="compare-img" />
                                 }
                             />
                         ) : (
