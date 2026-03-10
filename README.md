@@ -53,4 +53,10 @@ See [TECH_STACK.md](./TECH_STACK.md) for a full list of technologies and librari
 
 ---
 
+## License 
+
+MIT
+
+---
+
 Built with ❤️ by the GridToGround Team.
