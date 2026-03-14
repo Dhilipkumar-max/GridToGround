@@ -1,5 +1,4 @@
 # GridToGround
-
 GridToGround is a powerful AI-driven application that transforms 2D floor plans into immersive 3D visualizations. Built with React Router and powered by Google's Gemini models via Puter.js, it provides architects, designers, and homeowners with a seamless way to visualize spaces from a simple blueprint.
 
 ## 🚀 Features
