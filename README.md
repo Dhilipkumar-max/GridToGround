@@ -18,7 +18,7 @@ GridToGround is a powerful AI-driven application that transforms 2D floor plans 
 
 ### Installation
 
-1. Clone the repositor:
+1. Clone the repository:
    ```bash
    git clone https://github.com/Dhilipkumar-max/GridToGround.git
    cd GridToGround
@@ -28,7 +28,6 @@ GridToGround is a powerful AI-driven application that transforms 2D floor plans 
    ```bash
    npm install
    ```
-
 3. Start the development server:
    ```bash
    npm run dev
